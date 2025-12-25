@@ -1,7 +1,7 @@
 import joblib
 from pathlib import Path
 
-MODEL_PATH = Path("backend/models/knn.pkl")
+MODEL_PATH = "backend/models/churn_model.pkl"
 
 model = None
 
