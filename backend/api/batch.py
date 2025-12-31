@@ -1,16 +1,23 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import pandas as pd
+import io
 
 from ..utils.model_loader import load_model
 from ..database.session import get_db
 from ..database.schema import Prediction
+from ..utils.ai_helper import summarize_batch
 
 router = APIRouter(prefix="/predict", tags=["Batch Prediction"])
 
 
 @router.post("/batch")
-async def batch_predict(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def batch_predict(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    download: bool = Query(False)    # << NEW toggle
+):
     if not file.filename.endswith(".csv"):
         raise HTTPException(400, "Please upload a CSV file")
 
@@ -20,55 +27,98 @@ async def batch_predict(file: UploadFile = File(...), db: Session = Depends(get_
         raise HTTPException(400, "Could not read CSV file")
 
     required = [
-        "gender","SeniorCitizen","Partner","Dependents","tenure","PhoneService",
-        "MultipleLines","InternetService","OnlineSecurity","OnlineBackup",
-        "DeviceProtection","TechSupport","StreamingTV","StreamingMovies",
-        "Contract","PaperlessBilling","PaymentMethod","MonthlyCharges","TotalCharges"
+        "customerID","gender","SeniorCitizen","Partner","Dependents","tenure",
+        "PhoneService","MultipleLines","InternetService","OnlineSecurity",
+        "OnlineBackup","DeviceProtection","TechSupport","StreamingTV",
+        "StreamingMovies","Contract","PaperlessBilling","PaymentMethod",
+        "MonthlyCharges","TotalCharges"
     ]
 
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise HTTPException(400, f"Missing columns: {missing}")
+    defaults = {
+        "gender":"Female","SeniorCitizen":0,"Partner":"No","Dependents":"No",
+        "tenure":0,"PhoneService":"Yes","MultipleLines":"No","InternetService":"DSL",
+        "OnlineSecurity":"No","OnlineBackup":"No","DeviceProtection":"No",
+        "TechSupport":"No","StreamingTV":"No","StreamingMovies":"No",
+        "PaperlessBilling":"Yes","TotalCharges":0
+    }
 
-    model = load_model()
+    auto_filled = []
 
-    # ---- build feature frame (COPY) ----
+    for col in required:
+        if col not in df.columns:
+            df[col] = defaults.get(col, None)
+            auto_filled.append(col)
+
+    for c in df.select_dtypes(include="object").columns:
+        df[c] = df[c].fillna("").astype(str).str.strip()
+
     X = df[required].copy()
 
-    # ---- CLEAN NUMERIC FIELDS (fixes your crash) ----
-    X["TotalCharges"] = pd.to_numeric(X["TotalCharges"], errors="coerce").fillna(0)
     X["MonthlyCharges"] = pd.to_numeric(X["MonthlyCharges"], errors="coerce").fillna(0)
     X["tenure"] = pd.to_numeric(X["tenure"], errors="coerce").fillna(0).astype(int)
+    X["TotalCharges"] = pd.to_numeric(X["TotalCharges"], errors="coerce").fillna(
+        X["MonthlyCharges"] * X["tenure"]
+    )
 
-    # ---- run prediction ----
+    model = load_model()
     probs = model.predict_proba(X)[:, 1]
+
+    df["churn_probability"] = probs
+    df["prediction_label"] = (df["churn_probability"] > 0.5).map(
+        {True: "Likely to Churn", False: "Safe Customer"}
+    )
 
     results = []
 
     for i, prob in enumerate(probs):
-        label = "Likely to Churn" if prob > 0.5 else "Safe Customer"
+        label = df["prediction_label"][i]
 
-        record = Prediction(
-            customer_id=str(df["customerID"][i]) if "customerID" in df.columns else None,
-            tenure=int(df["tenure"][i]),
-            monthly_charges=float(df["MonthlyCharges"][i]),
-            contract=str(df["Contract"][i]),
-            probability=float(prob),
-            label=label
+        db.add(
+            Prediction(
+                customer_id=str(df["customerID"][i]),
+                tenure=int(X["tenure"][i]),
+                monthly_charges=float(X["MonthlyCharges"][i]),
+                contract=str(X["Contract"][i]),
+                probability=float(prob),
+                label=label,
+            )
         )
-
-        db.add(record)
 
         results.append({
             "row": int(i),
+            "customer_id": str(df["customerID"][i]),
             "probability": round(float(prob), 3),
             "label": label
         })
 
     db.commit()
 
+    # ---------- AI SUMMARY ----------
+    stats = {
+        "total_rows": len(results),
+        "likely_churn": int(sum(r["label"] == "Likely to Churn" for r in results)),
+        "safe": int(sum(r["label"] == "Safe Customer" for r in results)),
+    }
+
+    summary = summarize_batch(stats)
+
+    # ---------- CSV DOWNLOAD MODE ----------
+    if download:
+        buffer = io.StringIO()
+        df.to_csv(buffer, index=False)
+        buffer.seek(0)
+
+        return StreamingResponse(
+            buffer,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=churn_predictions.csv"},
+        )
+
+    # ---------- NORMAL JSON RESPONSE ----------
     return {
         "processed": len(results),
         "results_preview": results[:10],
-        "message": "Batch prediction completed"
+        "summary": summary,
+        "auto_filled_columns": auto_filled,
+        "message": "Batch prediction completed successfully."
     }

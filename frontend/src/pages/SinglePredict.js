@@ -1,147 +1,171 @@
 import React, { useState } from "react";
 import {
-  Container,
+  TextField,
+  Button,
   Card,
   CardContent,
   Typography,
-  Grid,
-  TextField,
-  Button,
-  Box
+  MenuItem,
+  Box,
+  Alert
 } from "@mui/material";
 import api from "../services/api";
 
 export default function SinglePredict() {
-  const [form, setForm] = useState({});
+  const [form, setForm] = useState({
+    customer_id: "",
+    tenure: "",
+    contract: "",
+    monthly_charges: "",
+    payment_method: ""
+  });
+
   const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const update = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setResult(null);
+    setLoading(true);
 
-  const submit = async () => {
     try {
-      const res = await api.post("/predict/", form);
+      const payload = {
+        customer_id: form.customer_id.trim(),
+        tenure: Number(form.tenure || 0),
+        contract: form.contract,
+        monthly_charges: Number(form.monthly_charges || 0),
+        payment_method: form.payment_method,
+      };
+
+      const res = await api.post("/predict/simple", payload);
       setResult(res.data);
+
     } catch (err) {
-      alert("Form incomplete — please fill all fields!");
-      console.log(err.response?.data);
+      console.log(err?.response?.data);
+      setError(
+        err?.response?.data?.detail ||
+          "Prediction failed — please check your inputs and try again."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 3 }}>
-      <Typography variant="h4" fontWeight="bold" gutterBottom>
+    <Box maxWidth={600} mx="auto">
+      <Typography variant="h5" sx={{ mb: 2 }}>
         Single Customer Prediction
       </Typography>
 
-      <Card sx={{ p: 2, mb: 3, boxShadow: 4 }}>
-        <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Customer ID" name="customer_id" onChange={update} />
-            </Grid>
+      <form onSubmit={handleSubmit}>
+        <TextField
+          label="Customer ID"
+          value={form.customer_id}
+          onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
+          required
+          fullWidth
+          margin="normal"
+        />
 
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Gender" name="gender" onChange={update} />
-            </Grid>
+        <TextField
+          label="Tenure (months)"
+          type="number"
+          value={form.tenure}
+          onChange={(e) => setForm({ ...form, tenure: e.target.value })}
+          required
+          fullWidth
+          margin="normal"
+        />
 
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth type="number" label="Senior Citizen (0/1)" name="senior_citizen" onChange={update} />
-            </Grid>
+        <TextField
+          select
+          label="Contract"
+          value={form.contract}
+          onChange={(e) => setForm({ ...form, contract: e.target.value })}
+          required
+          fullWidth
+          margin="normal"
+        >
+          <MenuItem value="Month-to-month">Month-to-month</MenuItem>
+          <MenuItem value="One year">One year</MenuItem>
+          <MenuItem value="Two year">Two year</MenuItem>
+        </TextField>
 
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Partner" name="partner" onChange={update} />
-            </Grid>
+        <TextField
+          type="number"
+          label="Monthly Charges"
+          value={form.monthly_charges}
+          onChange={(e) =>
+            setForm({ ...form, monthly_charges: e.target.value })
+          }
+          required
+          fullWidth
+          margin="normal"
+        />
 
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Dependents" name="dependents" onChange={update} />
-            </Grid>
+        <TextField
+          select
+          label="Payment Method"
+          value={form.payment_method}
+          onChange={(e) =>
+            setForm({ ...form, payment_method: e.target.value })
+          }
+          required
+          fullWidth
+          margin="normal"
+        >
+          <MenuItem value="Electronic check">Electronic check</MenuItem>
+          <MenuItem value="Mailed check">Mailed check</MenuItem>
+          <MenuItem value="Bank transfer (automatic)">
+            Bank transfer (automatic)
+          </MenuItem>
+          <MenuItem value="Credit card (automatic)">
+            Credit card (automatic)
+          </MenuItem>
+        </TextField>
 
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth type="number" label="Tenure" name="tenure" onChange={update} />
-            </Grid>
+        <Button
+          variant="contained"
+          type="submit"
+          fullWidth
+          sx={{ mt: 2 }}
+          disabled={loading}
+        >
+          {loading ? "Predicting..." : "Predict"}
+        </Button>
+      </form>
 
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Phone Service" name="phone_service" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Multiple Lines" name="multiple_lines" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Internet Service" name="internet_service" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Online Security" name="online_security" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Online Backup" name="online_backup" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Device Protection" name="device_protection" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Tech Support" name="tech_support" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Streaming TV" name="streaming_tv" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Streaming Movies" name="streaming_movies" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Contract" name="contract" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Paperless Billing" name="paperless_billing" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth label="Payment Method" name="payment_method" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth type="number" label="Monthly Charges" name="monthly_charges" onChange={update} />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField fullWidth type="number" label="Total Charges" name="total_charges" onChange={update} />
-            </Grid>
-          </Grid>
-
-          <Box mt={3}>
-            <Button
-              variant="contained"
-              color="primary"
-              size="large"
-              onClick={submit}
-            >
-              Predict
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+      {error && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       {result && (
-        <Card sx={{ p: 2, boxShadow: 4 }}>
-          <Typography variant="h6">
-            Result: <b>{result.label}</b>
-          </Typography>
-          <Typography>
-            Probability: <b>{result.probability}</b>
-          </Typography>
+        <Card sx={{ mt: 3 }}>
+          <CardContent>
+            <Typography variant="h6">
+              Result: {result.label}
+            </Typography>
+
+            <Typography sx={{ mt: 1 }}>
+              Probability: <strong>{result.probability}</strong>
+            </Typography>
+
+            {result.explanation && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle1">Explanation</Typography>
+
+                <pre style={{ whiteSpace: "pre-wrap" }}>
+                  {result.explanation}
+                </pre>
+              </Box>
+            )}
+          </CardContent>
         </Card>
       )}
-    </Container>
+    </Box>
   );
 }

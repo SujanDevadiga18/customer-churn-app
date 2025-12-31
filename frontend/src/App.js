@@ -1,3 +1,4 @@
+import ReportPage from "./pages/ReportPage";
 import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import {
@@ -87,6 +88,7 @@ export default function App() {
             <Route path="/batch" element={<BatchUpload />} />
             <Route path="/history" element={<History />} />
             <Route path="*" element={<Dashboard />} />
+            <Route path="/report/:customer_id" element={<ReportPage />} />
           </Routes>
         </Box>
       </BrowserRouter>
