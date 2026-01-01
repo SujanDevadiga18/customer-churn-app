@@ -30,5 +30,6 @@ gunicorn==22.0.0
 groq==0.18.0
 python-jose[cryptography]==3.4.0
 passlib[bcrypt]==1.7.4
+bcrypt==3.2.0
 reportlab==4.3.1
 
