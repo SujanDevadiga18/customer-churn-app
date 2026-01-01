@@ -85,6 +85,7 @@ def require_admin(current_user: User = Depends(get_current_user)):
 
 @router.post("/register", response_model=UserOut)
 def register(user: UserCreate, db: Session = Depends(get_db)):
+    print(f"DEBUG: Registering user: {user.username}, email: {user.email}")
     db_user = db.query(User).filter(User.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
