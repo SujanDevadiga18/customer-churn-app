@@ -11,11 +11,12 @@ env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path, override=True)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+client = None
 
-if not GROQ_API_KEY:
-    raise ValueError("❌ GROQ_API_KEY is not set. Add it to .env or environment variables.")
-
-client = Groq(api_key=GROQ_API_KEY)
+if GROQ_API_KEY:
+    client = Groq(api_key=GROQ_API_KEY)
+else:
+    print("⚠️ GROQ_API_KEY is not set. AI explanations will be disabled.")
 
 MODEL = "llama-3.1-8b-instant"
 
@@ -33,6 +34,9 @@ Write 4–6 short bullet points:
 - mention what reduces churn risk
 - keep simple and non-technical
 """
+
+    if not client:
+        return "AI Explanation is currently unavailable (Missing API Key)."
 
     resp = client.chat.completions.create(
         model=MODEL,
@@ -57,6 +61,9 @@ Explain in 6–8 bullet points:
 - suggested retention actions
 - short actionable insights for business
 """
+
+    if not client:
+        return "AI Summary is currently unavailable (Missing API Key)."
 
     resp = client.chat.completions.create(
         model=MODEL,
