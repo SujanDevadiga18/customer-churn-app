@@ -60,8 +60,10 @@ def predict(data: PredictRequest, db: Session = Depends(get_db)):
             tenure=data.tenure,
             monthly_charges=data.monthly_charges,
             contract=data.contract,
+            payment_method=data.payment_method, # <--- Added
             probability=prob,
             label=label,
+            explanation=explanation,
         )
 
         db.add(record)
@@ -92,7 +94,7 @@ class SimpleInput(BaseModel):
 
 
 @router.post("/simple")
-def predict_simple(data: SimpleInput):
+def predict_simple(data: SimpleInput, db: Session = Depends(get_db)):
 
     estimated_total = data.tenure * data.monthly_charges
 
@@ -120,6 +122,24 @@ def predict_simple(data: SimpleInput):
     label = "Likely to Churn" if prob > 0.5 else "Safe Customer"
 
     explanation = explain_single_customer(df.to_dict(), prob)
+
+    # Save to DB
+    try:
+        record = Prediction(
+            customer_id=data.customer_id,
+            tenure=data.tenure,
+            monthly_charges=data.monthly_charges,
+            contract=data.contract,
+            payment_method=data.payment_method,
+            probability=prob,
+            label=label,
+            explanation=explanation,
+        )
+        db.add(record)
+        db.commit()
+    except Exception as e:
+        print(f"Failed to save prediction: {e}")
+        # We don't block the response if saving fails, but good to log
 
     return {
         "probability": round(prob, 3),

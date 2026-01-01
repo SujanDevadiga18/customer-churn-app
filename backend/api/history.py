@@ -45,3 +45,29 @@ def get_history(
     }
 
 
+@router.get("/{customer_id}")
+def get_history_detail(customer_id: str, db: Session = Depends(get_db)):
+    record = (
+        db.query(Prediction)
+        .filter(Prediction.customer_id == customer_id)
+        .order_by(Prediction.created_at.desc())
+        .first()
+    )
+
+    if not record:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Prediction not found")
+
+    return {
+        "id": record.id,
+        "customer_id": record.customer_id,
+        "contract": record.contract,
+        "tenure": record.tenure,
+        "monthly_charges": record.monthly_charges,
+        "probability": round(record.probability, 3),
+        "label": record.label,
+        "explanation": record.explanation,
+        "created_at": record.created_at
+    }
+
+

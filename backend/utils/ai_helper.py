@@ -1,9 +1,14 @@
 import os
 from groq import Groq
+import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-# load .env
-load_dotenv()
+# load .env from the same directory as this file (backend/utils/)
+# OR better: from the backend root. 
+# ai_helper is in backend/utils, .env is in backend/.
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
