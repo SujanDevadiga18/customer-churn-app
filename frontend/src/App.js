@@ -26,19 +26,24 @@ import SinglePredict from "./pages/SinglePredict";
 import BatchUpload from "./pages/BatchUpload";
 import History from "./pages/History";
 import ReportPage from "./pages/ReportPage";
-import Login from "./pages/Login";
+// import Login from "./pages/Login";
 import ProfileDialog from "./components/ProfileDialog";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 const drawerWidth = 260;
 
+// function ProtectedRoute({ children }) {
+//   const { token, loading } = useAuth();
+//   const location = useLocation();
+
+//   if (loading) return <div>Loading...</div>;
+//   if (!token) return <Navigate to="/login" state={{ from: location }} replace />;
+
+//   return children;
+// }
+
 function ProtectedRoute({ children }) {
-  const { token, loading } = useAuth();
-  const location = useLocation();
-
-  if (loading) return <div>Loading...</div>;
-  if (!token) return <Navigate to="/login" state={{ from: location }} replace />;
-
+  // Authentication bypassed as requested
   return children;
 }
 
@@ -155,7 +160,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* <Route path="/login" element={<Login />} /> */}
           <Route path="/*" element={
             <ProtectedRoute>
               <MainLayout />
