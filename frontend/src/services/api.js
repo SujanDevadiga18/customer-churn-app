@@ -4,7 +4,7 @@ const api = axios.create({
   baseURL: process.env.NODE_ENV === "production"
     ? "https://churn-backend-7ge1.onrender.com"
     : "http://localhost:8000",
-  timeout: 20000
+  timeout: 60000
 });
 
 api.interceptors.request.use((config) => {

@@ -16,7 +16,10 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip
+  Chip,
+  CircularProgress,
+  Backdrop,
+  Alert
 } from "@mui/material";
 
 import {
@@ -52,29 +55,38 @@ export default function Dashboard() {
   const [topRisk, setTopRisk] = useState([]);
   const [trendData, setTrendData] = useState([]);
   const [paymentStats, setPaymentStats] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    api.get("/analytics/summary").then(res => setSummary(res.data));
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [summ, prob, cont, risk, trend, pay] = await Promise.all([
+          api.get("/analytics/summary"),
+          api.get("/analytics/probability_distribution"),
+          api.get("/analytics/churn_by_contract"),
+          api.get("/analytics/top_risk"),
+          api.get("/analytics/trend_by_tenure"),
+          api.get("/analytics/payment_stats")
+        ]);
 
-    api.get("/analytics/probability_distribution")
-      .then(res => setProbDist(res.data))
-      .catch(() => setProbDist([]));
+        setSummary(summ.data);
+        setProbDist(prob.data);
+        setContractStats(cont.data);
+        setTopRisk(risk.data);
+        setTrendData(trend.data);
+        setPaymentStats(pay.data);
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+        setError("The server might be waking up. Please wait a moment...");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    api.get("/analytics/churn_by_contract")
-      .then(res => setContractStats(res.data))
-      .catch(() => setContractStats([]));
-
-    api.get("/analytics/top_risk")
-      .then(res => setTopRisk(res.data))
-      .catch(() => setTopRisk([]));
-
-    api.get("/analytics/trend_by_tenure")
-      .then(res => setTrendData(res.data))
-      .catch(() => setTrendData([]));
-
-    api.get("/analytics/payment_stats")
-      .then(res => setPaymentStats(res.data))
-      .catch(() => setPaymentStats([]));
+    fetchData();
   }, []);
 
   const COLORS = ["#2979FF", "#E53935", "#FBC02D"];
@@ -118,6 +130,21 @@ export default function Dashboard() {
           </Button>
         )}
       </Box>
+
+      {error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      <Backdrop
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, flexDirection: 'column', gap: 2 }}
+        open={loading}
+      >
+        <CircularProgress color="inherit" />
+        <Typography variant="h6">Waking up the engine...</Typography>
+        <Typography variant="caption">The server sleeps after 15 mins of inactivity. This may take up to a minute.</Typography>
+      </Backdrop>
 
       {/* KPI CARDS */}
       <Grid container spacing={2}>
