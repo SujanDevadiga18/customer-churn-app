@@ -17,8 +17,7 @@ import {
   TableRow,
   Paper,
   Chip,
-  CircularProgress,
-  Backdrop,
+  LinearProgress,
   Alert
 } from "@mui/material";
 
@@ -137,14 +136,14 @@ export default function Dashboard() {
         </Alert>
       )}
 
-      <Backdrop
-        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, flexDirection: 'column', gap: 2 }}
-        open={loading}
-      >
-        <CircularProgress color="inherit" />
-        <Typography variant="h6">Waking up the engine...</Typography>
-        <Typography variant="caption">The server sleeps after 15 mins of inactivity. This may take up to a minute.</Typography>
-      </Backdrop>
+      {loading && (
+        <Box sx={{ width: '100%', mb: 2 }}>
+          <LinearProgress color="primary" />
+          <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'text.secondary' }}>
+            Fetching latest analytics... (The server may take a moment to wake up)
+          </Typography>
+        </Box>
+      )}
 
       {/* KPI CARDS */}
       <Grid container spacing={2}>
