@@ -20,14 +20,18 @@ import { motion } from "framer-motion";
 import { CloudUpload, Download, TableChart, AutoAwesome, Description } from "@mui/icons-material";
 import api from "../services/api";
 
+/* ---------------------- AI SUMMARY FORMATTER ---------------------- */
+
 const FormattedReport = ({ text }) => {
   if (!text) return null;
   const lines = text.split("\n");
+
   return (
     <Box sx={{ mt: 2, fontFamily: 'Inter, sans-serif' }}>
       {lines.map((line, index) => {
         const cleanLine = line.replace(/\*\*/g, "").replace(/\*/g, "").trim();
         if (!cleanLine) return <Box key={index} sx={{ h: 1 }} />;
+
         if (line.trim().startsWith("-") || line.trim().startsWith("•")) {
           return (
             <Box key={index} sx={{ display: 'flex', mb: 1, ml: 1 }}>
@@ -38,6 +42,7 @@ const FormattedReport = ({ text }) => {
             </Box>
           );
         }
+
         if (line.trim().endsWith(":")) {
           return (
             <Typography key={index} variant="h6" sx={{ mt: 2, mb: 1, color: 'primary.dark', fontWeight: 600 }}>
@@ -45,6 +50,7 @@ const FormattedReport = ({ text }) => {
             </Typography>
           );
         }
+
         return (
           <Typography key={index} variant="body1" sx={{ mb: 1 }} color="text.primary">
             {cleanLine}
@@ -55,12 +61,32 @@ const FormattedReport = ({ text }) => {
   );
 };
 
+/* ---------------------- MAIN COMPONENT ---------------------- */
+
 export default function BatchUpload() {
   const [file, setFile] = useState(null);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(() => {
+    const savedResult = localStorage.getItem("batch_result");
+    return savedResult ? JSON.parse(savedResult) : null;
+  });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Sync state to localStorage
+  React.useEffect(() => {
+    if (result) {
+      localStorage.setItem("batch_result", JSON.stringify(result));
+    }
+  }, [result]);
+
+  const handleNewPrediction = () => {
+    setFile(null);
+    setResult(null);
+    setError(null);
+    localStorage.removeItem("batch_result");
+  };
+
+  /* -------- File Selection -------- */
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
@@ -68,6 +94,7 @@ export default function BatchUpload() {
     }
   };
 
+  /* -------- Upload CSV -------- */
   const handleUpload = async () => {
     if (!file) {
       setError("Please select a CSV file first");
@@ -76,7 +103,6 @@ export default function BatchUpload() {
 
     setLoading(true);
     setError(null);
-    setResult(null);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -95,6 +121,7 @@ export default function BatchUpload() {
     }
   };
 
+  /* -------- Download Predictions -------- */
   const handleDownload = async () => {
     if (!file) {
       setError("Upload a CSV first to download results");
@@ -117,115 +144,132 @@ export default function BatchUpload() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <Box maxWidth={1000} mx="auto">
-        <Typography variant="h4" fontWeight="bold" gutterBottom>
-          Batch Upload
-        </Typography>
+
+        {/* HEADER */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h4" fontWeight="bold">
+            Batch Upload
+          </Typography>
+          {result && (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleNewPrediction}
+              sx={{ borderRadius: 2 }}
+            >
+              New Prediction
+            </Button>
+          )}
+        </Box>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          Process huge datasets instantly. Upload your CSV to get bulk predictions and insights.
+          Upload a CSV dataset to run bulk churn predictions and analytics.
         </Typography>
 
-        <Card variant="outlined" sx={{ borderRadius: 3, mb: 4, borderStyle: 'dashed', borderColor: 'primary.main', borderWidth: 2, bgcolor: 'background.paper' }}>
+        {/* FILE UPLOAD */}
+        <Card variant="outlined" sx={{ borderRadius: 3, mb: 4, borderStyle: 'dashed', borderColor: 'primary.main', borderWidth: 2 }}>
           <CardContent sx={{ textAlign: 'center', py: 5 }}>
             <CloudUpload sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-            <Typography variant="h6" gutterBottom>
-              Drag & Drop your CSV here
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              or click to browse from your computer
-            </Typography>
 
-            <input
-              accept=".csv"
-              style={{ display: 'none' }}
-              id="raised-button-file"
-              type="file"
-              onChange={handleFileChange}
-            />
-            <label htmlFor="raised-button-file">
-              <Button variant="contained" component="span" size="medium" sx={{ borderRadius: 2, textTransform: 'none' }}>
-                Choose File
-              </Button>
+            <input accept=".csv" style={{ display: 'none' }} id="file-upload" type="file" onChange={handleFileChange} />
+            <label htmlFor="file-upload">
+              <Button variant="contained" component="span">Choose CSV File</Button>
             </label>
 
             {file && (
-              <Box sx={{ mt: 3, display: 'inline-flex', alignItems: 'center', bgcolor: 'action.hover', px: 2, py: 1, borderRadius: 2 }}>
-                <Description color="action" sx={{ mr: 1 }} />
-                <Typography variant="body2" fontWeight="medium">
-                  {file.name}
-                </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2">{file.name}</Typography>
               </Box>
             )}
           </CardContent>
         </Card>
 
+        {/* ACTION BUTTONS */}
         <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={handleUpload}
-            disabled={loading || !file}
-            startIcon={<AutoAwesome />}
-            fullWidth
-            sx={{ borderRadius: 2, py: 1.5 }}
-          >
+          <Button variant="contained" onClick={handleUpload} disabled={loading || !file} fullWidth>
             {loading ? "Processing..." : "Run Predictions"}
           </Button>
 
-          <Button
-            variant="outlined"
-            size="large"
-            onClick={handleDownload}
-            disabled={!file}
-            startIcon={<Download />}
-            sx={{ borderRadius: 2, minWidth: 200 }}
-          >
+          <Button variant="outlined" onClick={handleDownload} disabled={!file}>
             Download CSV
           </Button>
         </Box>
 
-        {loading && <LinearProgress sx={{ mb: 4, borderRadius: 1 }} />}
+        {loading && <LinearProgress sx={{ mb: 3 }} />}
+        {error && <Alert severity="error">{error}</Alert>}
 
-        {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
-
+        {/* RESULTS */}
         {result && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            {/* RESULTS TABLE */}
+
+            {/* ---------- CHURN METRICS DASHBOARD ---------- */}
             <Card elevation={3} sx={{ borderRadius: 3, mb: 4 }}>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" fontWeight="bold">
-                    <TableChart sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Results Preview
-                  </Typography>
-                  <Chip label={`Processed: ${result.processed}`} color="primary" />
-                </Box>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 3 }}>
+                  Dataset Analytics
+                </Typography>
 
-                <TableContainer component={Paper} elevation={0} sx={{ maxHeight: 300, bgcolor: 'background.default' }}>
-                  <Table stickyHeader size="small">
+                <Box sx={{ display: "flex", justifyContent: "space-around", textAlign: "center", flexWrap: "wrap", gap: 4 }}>
+
+                  <Box>
+                    <Typography variant="h4" fontWeight="bold" color="primary.main">
+                      {result.processed}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Customers
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="h4" fontWeight="bold" color="error.main">
+                      {result.churned_customers}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Likely to Churn
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="h4" fontWeight="bold" color="warning.main">
+                      {result.churn_rate}%
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Churn Rate
+                    </Typography>
+                  </Box>
+
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* ---------- RESULTS TABLE ---------- */}
+            <Card elevation={3} sx={{ borderRadius: 3, mb: 4 }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+                  Results Preview
+                </Typography>
+
+                <TableContainer component={Paper}>
+                  <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell><strong>Customer</strong></TableCell>
-                        <TableCell><strong>Probability</strong></TableCell>
-                        <TableCell><strong>Label</strong></TableCell>
+                        <TableCell>Customer</TableCell>
+                        <TableCell>Probability</TableCell>
+                        <TableCell>Label</TableCell>
                       </TableRow>
                     </TableHead>
+
                     <TableBody>
                       {result.results_preview?.map((row, index) => (
-                        <TableRow key={index} hover>
+                        <TableRow key={index}>
                           <TableCell>{row.customer_id}</TableCell>
                           <TableCell>{(row.probability * 100).toFixed(1)}%</TableCell>
                           <TableCell>
                             <Chip
                               label={row.label}
+                              color={row.label === "Likely to Churn" ? "error" : "success"}
                               size="small"
-                              color={row.label === 'Likely to Churn' ? 'error' : 'success'}
-                              variant="soft"
                             />
                           </TableCell>
                         </TableRow>
@@ -236,22 +280,21 @@ export default function BatchUpload() {
               </CardContent>
             </Card>
 
-            {/* AI SUMMARY */}
+            {/* ---------- AI SUMMARY ---------- */}
             {result.summary && (
-              <Card elevation={3} sx={{ borderRadius: 3, bgcolor: 'primary.50' }}>
+              <Card elevation={3} sx={{ borderRadius: 3 }}>
                 <CardContent>
-                  <Typography variant="h6" color="primary.dark" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AutoAwesome /> Strategic Insights
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    Strategic Insights
                   </Typography>
                   <FormattedReport text={result.summary} />
                 </CardContent>
               </Card>
             )}
+
           </motion.div>
         )}
       </Box>
     </motion.div>
   );
 }
-
-

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from ..database.session import get_db
-from ..database.schema import Prediction
+from database.session import get_db
+from database.schema import Prediction, User
+from .auth import get_current_user
 
 router = APIRouter(prefix="/history", tags=["History"])
 
@@ -9,19 +10,24 @@ router = APIRouter(prefix="/history", tags=["History"])
 def get_history(
     page: int = Query(1, ge=1),
     limit: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     skip = (page - 1) * limit
+    
+    query = db.query(Prediction)
+    if current_user.role != "admin":
+        query = query.filter(Prediction.user_id == current_user.id)
 
     records = (
-        db.query(Prediction)
+        query
         .order_by(Prediction.created_at.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
 
-    total = db.query(Prediction).count()
+    total = query.count()
 
     serialized = [
         {
@@ -45,11 +51,30 @@ def get_history(
     }
 
 
+@router.delete("/{record_id}")
+def delete_history_record(record_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(Prediction).filter(Prediction.id == record_id)
+    if current_user.role != "admin":
+        query = query.filter(Prediction.user_id == current_user.id)
+
+    deleted = query.delete()
+    db.commit()
+
+    if not deleted:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    return {"message": "Record deleted"}
+
+
 @router.get("/{customer_id}")
-def get_history_detail(customer_id: str, db: Session = Depends(get_db)):
+def get_history_detail(customer_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(Prediction).filter(Prediction.customer_id == customer_id)
+    if current_user.role != "admin":
+        query = query.filter(Prediction.user_id == current_user.id)
+        
     record = (
-        db.query(Prediction)
-        .filter(Prediction.customer_id == customer_id)
+        query
         .order_by(Prediction.created_at.desc())
         .first()
     )

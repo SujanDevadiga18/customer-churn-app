@@ -7,8 +7,8 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from typing import Optional
 
-from ..database.session import get_db
-from ..database.schema import User
+from database.session import get_db
+from database.schema import User
 
 # Configuration
 SECRET_KEY = "mysecretkey"  # In production, move to .env

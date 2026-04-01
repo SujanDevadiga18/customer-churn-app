@@ -145,7 +145,7 @@ export default function ReportPage() {
                 variant="outlined"
                 color="error" // Red for PDF
                 startIcon={<PictureAsPdf />}
-                onClick={() => window.open(`http://127.0.0.1:8000/report/${report.customer_id}/pdf`, "_blank")}
+                onClick={() => window.open(`${api.defaults.baseURL}/report/${report.customer_id}/pdf`, "_blank")}
               >
                 Download Report PDF
               </Button>

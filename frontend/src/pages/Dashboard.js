@@ -58,7 +58,12 @@ export default function Dashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    fetchData();
+  }, []);
+
+  const COLORS = ["#2979FF", "#E53935", "#FBC02D"];
+
+  const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
@@ -79,23 +84,19 @@ export default function Dashboard() {
         setPaymentStats(pay.data);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
-        setError("The server might be waking up. Please wait a moment...");
+        const msg = err.response?.data?.detail || err.message || "Unknown error";
+        setError(`Failed to load dashboard data: ${msg}. Please ensure the backend is running and the database is migrated.`);
       } finally {
         setLoading(false);
       }
-    };
-
-    fetchData();
-  }, []);
-
-  const COLORS = ["#2979FF", "#E53935", "#FBC02D"];
+  };
 
   const handleClearHistory = async () => {
     if (window.confirm("Are you sure you want to delete ALL history? This cannot be undone.")) {
       try {
         await api.delete("/clear/all");
         alert("History cleared successfully!");
-        window.location.reload(); // Refresh to show empty state
+        await fetchData();
       } catch (err) {
         console.error(err);
         alert("Failed to clear history.");
@@ -123,15 +124,27 @@ export default function Dashboard() {
           Customer Churn Dashboard
         </Typography>
 
-        {user?.role === "admin" && (
-          <Button variant="contained" color="error" onClick={handleClearHistory}>
-            Clear History
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={fetchData}
+            disabled={loading}
+          >
+            Refresh data
           </Button>
-        )}
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleClearHistory}
+            disabled={loading}
+          >
+            Delete all predictions
+          </Button>
+        </Box>
       </Box>
 
       {error && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
@@ -139,9 +152,6 @@ export default function Dashboard() {
       {loading && (
         <Box sx={{ width: '100%', mb: 2 }}>
           <LinearProgress color="primary" />
-          <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'text.secondary' }}>
-            Fetching latest analytics... (The server may take a moment to wake up)
-          </Typography>
         </Box>
       )}
 
@@ -172,7 +182,7 @@ export default function Dashboard() {
             <CardContent>
               <Typography variant="subtitle2">Churn Rate</Typography>
               <Typography variant="h4">
-                {(summary.churn_rate * 100).toFixed(1)}%
+                {(summary.churn_rate).toFixed(1)}%
               </Typography>
             </CardContent>
           </Card>

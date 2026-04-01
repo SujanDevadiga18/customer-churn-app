@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 
-from .database.db import Base, engine
-from .api import predict, history, batch, analytics, report, clear, auth
+from database.db import Base, engine
+from api import predict, history, batch, analytics, report, clear, auth
 
 # Load .env explicitly from backend directory
 env_path = Path(__file__).resolve().parent / ".env"
@@ -17,9 +17,8 @@ Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
         "https://customer-churn-app-one.vercel.app",
     ],
     allow_credentials=True,

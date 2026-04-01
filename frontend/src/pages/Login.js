@@ -38,6 +38,23 @@ export default function Login() {
         e.preventDefault();
         setError("");
         setLoading(true);
+
+        // Validation
+        if (isRegister) {
+            if (!email.endsWith('@gmail.com')) {
+                setError("Only Gmail addresses are allowed for registration.");
+                setLoading(false);
+                return;
+            }
+        } else {
+            // For login, if it looks like an email, check domain
+            if (username.includes('@') && !username.endsWith('@gmail.com')) {
+                setError("Only Gmail addresses are allowed for login.");
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
             if (isRegister) {
                 await register(username, email, password);
@@ -49,7 +66,22 @@ export default function Login() {
                 navigate("/");
             }
         } catch (err) {
-            setError(err.response?.data?.detail || "Action failed. Please check your credentials.");
+            console.error("Login/Register error:", err);
+            let errMsg = "Action failed. Please check your credentials.";
+            
+            if (err.response && err.response.data) {
+                if (typeof err.response.data.detail === "string") {
+                    errMsg = err.response.data.detail;
+                } else if (err.response.data.detail) {
+                    errMsg = JSON.stringify(err.response.data.detail);
+                } else if (err.response.data.message) {
+                    errMsg = err.response.data.message;
+                }
+            } else if (err.message) {
+                errMsg = "Network Error: Cannot connect to backend server. Make sure it is running.";
+            }
+            
+            setError(errMsg);
         } finally {
             setLoading(false);
         }

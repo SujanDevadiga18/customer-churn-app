@@ -50,6 +50,6 @@ pred = model.predict_proba(X_test)[:, 1]
 print("ROC AUC:", roc_auc_score(y_test, pred))
 
 Path("backend/models").mkdir(exist_ok=True)
-joblib.dump(model, "backend/models/knn.pkl")
+joblib.dump(model, "backend/models/churn_model.pkl")
 
 print("Model saved!")

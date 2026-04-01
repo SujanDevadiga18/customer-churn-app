@@ -35,6 +35,16 @@ export const AuthProvider = ({ children }) => {
 
         localStorage.setItem("token", newToken);
         setToken(newToken);
+
+        // Fetch user profile after login so UI has current user immediately
+        try {
+            const profileRes = await api.get("/auth/me");
+            setUser(profileRes.data);
+        } catch (err) {
+            console.error("Failed to fetch profile after login", err);
+            setUser(null);
+        }
+
         return true;
     };
 

@@ -5,6 +5,7 @@ class Prediction(Base):
     __tablename__ = "predictions"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=True) # Foreign key equivalent to user.id
     customer_id = Column(String, nullable=True)
     tenure = Column(Integer)
     monthly_charges = Column(Float)

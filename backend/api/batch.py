@@ -4,10 +4,11 @@ from sqlalchemy.orm import Session
 import pandas as pd
 import io
 
-from ..utils.model_loader import load_model
-from ..database.session import get_db
-from ..database.schema import Prediction
-from ..utils.ai_helper import summarize_batch
+from utils.model_loader import load_model
+from database.session import get_db
+from database.schema import Prediction, User
+from .auth import get_current_user
+from utils.ai_helper import summarize_batch
 
 router = APIRouter(prefix="/predict", tags=["Batch Prediction"])
 
@@ -16,8 +17,10 @@ router = APIRouter(prefix="/predict", tags=["Batch Prediction"])
 async def batch_predict(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    download: bool = Query(False)    # << NEW toggle
+    current_user: User = Depends(get_current_user),
+    download: bool = Query(False)
 ):
+    # ----------- FILE CHECK -----------
     if not file.filename.endswith(".csv"):
         raise HTTPException(400, "Please upload a CSV file")
 
@@ -26,6 +29,7 @@ async def batch_predict(
     except Exception:
         raise HTTPException(400, "Could not read CSV file")
 
+    # ----------- REQUIRED COLUMNS -----------
     required = [
         "customerID","gender","SeniorCitizen","Partner","Dependents","tenure",
         "PhoneService","MultipleLines","InternetService","OnlineSecurity",
@@ -44,39 +48,31 @@ async def batch_predict(
 
     auto_filled = []
 
-    # 1. Fill missing columns with defaults
+    # ----------- FILL MISSING COLUMNS -----------
     for col in required:
         if col not in df.columns:
             df[col] = defaults.get(col, None)
             auto_filled.append(col)
 
-    # 2. Robust NaN filling for Categorical columns
-    # Select object columns that are in 'required' to avoid touching extra columns unnecessarily, 
-    # OR just touch everything relevant.
+    # ----------- CLEAN CATEGORICAL DATA -----------
     cat_cols = [c for c in required if c in df.columns and df[c].dtype == 'object']
     for c in cat_cols:
-        # Fill NaN with empty string or mode-like default? 
-        # The model likely expects "No", "DSL" etc. Empty string might be treated as new category.
-        # Let's fill with defaults entry if available, else "No".
         default_val = defaults.get(c, "No")
         df[c] = df[c].fillna(default_val).astype(str).str.strip()
 
     X = df[required].copy()
 
-    # 3. Robust NaN filling for Numeric columns
+    # ----------- CLEAN NUMERIC DATA -----------
     X["SeniorCitizen"] = pd.to_numeric(X["SeniorCitizen"], errors="coerce").fillna(0).astype(int)
     X["tenure"] = pd.to_numeric(X["tenure"], errors="coerce").fillna(0).astype(int)
     X["MonthlyCharges"] = pd.to_numeric(X["MonthlyCharges"], errors="coerce").fillna(0.0)
-    
-    # Calculate TotalCharges cleanly
-    # First coerce existing TotalCharges
+
     X["TotalCharges"] = pd.to_numeric(X["TotalCharges"], errors="coerce")
-    # Then fill NaNs with Monthly * Tenure
     mask_nan_total = X["TotalCharges"].isna()
     X.loc[mask_nan_total, "TotalCharges"] = X.loc[mask_nan_total, "MonthlyCharges"] * X.loc[mask_nan_total, "tenure"]
-    # Final cleanup just in case
     X["TotalCharges"] = X["TotalCharges"].fillna(0.0)
 
+    # ----------- MODEL PREDICTION -----------
     model = load_model()
     probs = model.predict_proba(X)[:, 1]
 
@@ -92,11 +88,12 @@ async def batch_predict(
 
         db.add(
             Prediction(
+                user_id=current_user.id,
                 customer_id=str(df["customerID"][i]),
                 tenure=int(X["tenure"][i]),
                 monthly_charges=float(X["MonthlyCharges"][i]),
                 contract=str(X["Contract"][i]),
-                payment_method=str(X["PaymentMethod"][i]), # <--- Added
+                payment_method=str(X["PaymentMethod"][i]),
                 probability=float(prob),
                 label=label,
             )
@@ -111,16 +108,28 @@ async def batch_predict(
 
     db.commit()
 
-    # ---------- AI SUMMARY ----------
+    # ----------- CALCULATE CHURN METRICS (FIX) -----------
+    total_customers = len(results)
+    churned_customers = sum(r["label"] == "Likely to Churn" for r in results)
+    safe_customers = sum(r["label"] == "Safe Customer" for r in results)
+
+    churn_rate = round((churned_customers / total_customers) * 100, 2) if total_customers > 0 else 0
+
     stats = {
-        "total_rows": len(results),
-        "likely_churn": int(sum(r["label"] == "Likely to Churn" for r in results)),
-        "safe": int(sum(r["label"] == "Safe Customer" for r in results)),
+        "total_rows": total_customers,
+        "likely_churn": churned_customers,
+        "safe": safe_customers,
+        "churn_rate": churn_rate
     }
 
-    summary = summarize_batch(stats)
+    # ----------- AI SUMMARY (CRITICAL FIX: Graceful Failure) -----------
+    try:
+        summary = summarize_batch(stats)
+    except Exception as e:
+        print(f"AI Batch Summary Error: {e}")
+        summary = "AI analysis temporarily unavailable for this batch."
 
-    # ---------- CSV DOWNLOAD MODE ----------
+    # ----------- CSV DOWNLOAD MODE -----------
     if download:
         buffer = io.StringIO()
         df.to_csv(buffer, index=False)
@@ -132,9 +141,11 @@ async def batch_predict(
             headers={"Content-Disposition": "attachment; filename=churn_predictions.csv"},
         )
 
-    # ---------- NORMAL JSON RESPONSE ----------
+    # ----------- FINAL RESPONSE -----------
     return {
-        "processed": len(results),
+        "processed": total_customers,
+        "churned_customers": churned_customers,
+        "churn_rate": churn_rate,
         "results_preview": results[:10],
         "summary": summary,
         "auto_filled_columns": auto_filled,

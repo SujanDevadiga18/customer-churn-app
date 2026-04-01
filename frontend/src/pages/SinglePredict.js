@@ -11,7 +11,8 @@ import {
   Grid,
   Divider,
   Chip,
-  Paper
+  Paper,
+  CircularProgress
 } from "@mui/material";
 import { motion } from "framer-motion";
 import {
@@ -72,22 +73,52 @@ const FormattedReport = ({ text }) => {
 };
 
 export default function SinglePredict() {
-  const [form, setForm] = useState({
-    customer_id: "",
-    tenure: "",
-    contract: "",
-    monthly_charges: "",
-    payment_method: ""
+  const [form, setForm] = useState(() => {
+    const savedForm = localStorage.getItem("sp_form");
+    return savedForm ? JSON.parse(savedForm) : {
+      customer_id: "",
+      tenure: "",
+      contract: "",
+      monthly_charges: "",
+      payment_method: ""
+    };
   });
 
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(() => {
+    const savedResult = localStorage.getItem("sp_result");
+    return savedResult ? JSON.parse(savedResult) : null;
+  });
+
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Sync state to localStorage
+  React.useEffect(() => {
+    localStorage.setItem("sp_form", JSON.stringify(form));
+  }, [form]);
+
+  React.useEffect(() => {
+    localStorage.setItem("sp_result", JSON.stringify(result));
+  }, [result]);
+
+  const handleNewPrediction = () => {
+    const freshForm = {
+      customer_id: "",
+      tenure: "",
+      contract: "",
+      monthly_charges: "",
+      payment_method: ""
+    };
+    setForm(freshForm);
+    setResult(null);
+    setError(null);
+    localStorage.removeItem("sp_form");
+    localStorage.removeItem("sp_result");
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    setResult(null);
     setLoading(true);
 
     try {
@@ -120,9 +151,22 @@ export default function SinglePredict() {
       transition={{ duration: 0.5 }}
     >
       <Box maxWidth={900} mx="auto">
-        <Typography variant="h4" fontWeight="bold" gutterBottom>
-          Single Prediction
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h4" fontWeight="bold">
+            Single Prediction
+          </Typography>
+          {(result || form.customer_id) && (
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={handleNewPrediction}
+              sx={{ borderRadius: 2 }}
+            >
+              New Prediction
+            </Button>
+          )}
+        </Box>
+
         <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
           Enter customer metrics to generate a real-time churn risk analysis.
         </Typography>
@@ -222,7 +266,8 @@ export default function SinglePredict() {
           {/* RIGHT: RESULT */}
           <Grid item xs={12} md={6}>
             {loading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
+                <CircularProgress color="primary" sx={{ mb: 2 }} />
                 <Typography color="text.secondary">AI is processing the data...</Typography>
               </Box>
             )}
@@ -237,7 +282,7 @@ export default function SinglePredict() {
               <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
             )}
 
-            {result && (
+            {!loading && result && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -245,7 +290,7 @@ export default function SinglePredict() {
                 <Card elevation={4} sx={{ borderRadius: 3, overflow: 'visible', position: 'relative' }}>
                   <CardContent>
                     <Box sx={{ textAlign: 'center', mb: 3 }}>
-                      <Typography variant="subtitle2" color="text.secondary" uppercase>Risk Assessment</Typography>
+                      <Typography variant="subtitle2" color="text.secondary">Risk Assessment</Typography>
                       <Typography variant="h3" fontWeight="800" color={result.label === 'Likely to Churn' ? 'error.main' : 'success.main'} sx={{ mt: 1 }}>
                         {(result.probability * 100).toFixed(1)}%
                       </Typography>
@@ -262,7 +307,6 @@ export default function SinglePredict() {
                       <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <AutoAwesome color="warning" /> AI Insights
                       </Typography>
-                      {/* CUSTOM FORMATTER */}
                       <FormattedReport text={result.explanation} />
                     </Box>
                   </CardContent>

@@ -4,10 +4,11 @@ import pandas as pd
 from pydantic import BaseModel
 
 from .schemas import PredictRequest, PredictResponse
-from ..utils.model_loader import load_model
-from ..database.schema import Prediction
-from ..database.session import get_db
-from ..utils.ai_helper import explain_single_customer
+from utils.model_loader import load_model
+from database.session import get_db
+from database.schema import Prediction, User
+from .auth import get_current_user
+from utils.ai_helper import explain_single_customer
 
 router = APIRouter(prefix="/predict", tags=["Prediction"])
 
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/predict", tags=["Prediction"])
 # FULL INPUT PREDICTION
 # =========================================================
 @router.post("/", response_model=PredictResponse)
-def predict(data: PredictRequest, db: Session = Depends(get_db)):
+def predict(data: PredictRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
 
     model = load_model()
 
@@ -53,21 +54,31 @@ def predict(data: PredictRequest, db: Session = Depends(get_db)):
         prob = float(model.predict_proba(row)[0][1])
         label = "Likely to Churn" if prob > 0.5 else "Safe Customer"
 
-        explanation = explain_single_customer(row.to_dict(), prob)
+        # AI explanation (graceful failure)
+        try:
+            explanation = explain_single_customer(row.to_dict(), prob)
+        except Exception as e:
+            print(f"AI error: {e}")
+            explanation = "AI explanation unavailable at this time."
 
-        record = Prediction(
-            customer_id=data.customer_id,
-            tenure=data.tenure,
-            monthly_charges=data.monthly_charges,
-            contract=data.contract,
-            payment_method=data.payment_method, # <--- Added
-            probability=prob,
-            label=label,
-            explanation=explanation,
-        )
+        try:
+            record = Prediction(
+                user_id=current_user.id,
+                customer_id=data.customer_id,
+                tenure=data.tenure,
+                monthly_charges=data.monthly_charges,
+                contract=data.contract,
+                payment_method=data.payment_method,
+                probability=prob,
+                label=label,
+                explanation=explanation,
+            )
 
-        db.add(record)
-        db.commit()
+            db.add(record)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"DB Error: {e}")
 
         return {
             "probability": round(prob, 3),
@@ -76,7 +87,8 @@ def predict(data: PredictRequest, db: Session = Depends(get_db)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"General Prediction Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction core failure: {str(e)}")
 
 
 # =========================================================
@@ -94,7 +106,7 @@ class SimpleInput(BaseModel):
 
 
 @router.post("/simple")
-def predict_simple(data: SimpleInput, db: Session = Depends(get_db)):
+def predict_simple(data: SimpleInput, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
 
     estimated_total = data.tenure * data.monthly_charges
 
@@ -121,11 +133,17 @@ def predict_simple(data: SimpleInput, db: Session = Depends(get_db)):
     prob = float(model.predict_proba(df)[0][1])
     label = "Likely to Churn" if prob > 0.5 else "Safe Customer"
 
-    explanation = explain_single_customer(df.to_dict(), prob)
+    # Get AI explanation (with fallback)
+    try:
+        explanation = explain_single_customer(df.to_dict(), prob)
+    except Exception as e:
+        print(f"AI Error: {e}")
+        explanation = "AI analysis temporarily unavailable."
 
     # Save to DB
     try:
         record = Prediction(
+            user_id=current_user.id,
             customer_id=data.customer_id,
             tenure=data.tenure,
             monthly_charges=data.monthly_charges,
@@ -138,8 +156,9 @@ def predict_simple(data: SimpleInput, db: Session = Depends(get_db)):
         db.add(record)
         db.commit()
     except Exception as e:
+        db.rollback()
         print(f"Failed to save prediction: {e}")
-        # We don't block the response if saving fails, but good to log
+        # Note: We return the prediction even if DB save fails, but now it shouldn't fail due to missing user_id column
 
     return {
         "probability": round(prob, 3),

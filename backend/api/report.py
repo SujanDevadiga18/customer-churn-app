@@ -5,19 +5,22 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 import tempfile
 
-from ..database.session import get_db
-from ..database.schema import Prediction
-from ..utils.ai_helper import explain_single_customer
+from database.session import get_db
+from database.schema import Prediction, User
+from .auth import get_current_user
+from utils.ai_helper import explain_single_customer
 
 router = APIRouter(prefix="/report", tags=["Reports"])
 
 
 @router.get("/{customer_id}")
-def get_report(customer_id: str, db: Session = Depends(get_db)):
-
+def get_report(customer_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(Prediction).filter(Prediction.customer_id == customer_id)
+    if current_user.role != "admin":
+        query = query.filter(Prediction.user_id == current_user.id)
+        
     record = (
-        db.query(Prediction)
-        .filter(Prediction.customer_id == customer_id)
+        query
         .order_by(Prediction.created_at.desc())
         .first()
     )
@@ -47,11 +50,13 @@ def get_report(customer_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{customer_id}/pdf")
-def get_report_pdf(customer_id: str, db: Session = Depends(get_db)):
-
+def get_report_pdf(customer_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(Prediction).filter(Prediction.customer_id == customer_id)
+    if current_user.role != "admin":
+        query = query.filter(Prediction.user_id == current_user.id)
+        
     record = (
-        db.query(Prediction)
-        .filter(Prediction.customer_id == customer_id)
+        query
         .order_by(Prediction.created_at.desc())
         .first()
     )

@@ -114,8 +114,26 @@ export default function History() {
                       size="small"
                       startIcon={<Visibility />}
                       onClick={() => (window.location.href = `/report/${r.customer_id}`)}
+                      sx={{ mr: 1 }}
                     >
                       Report
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      size="small"
+                      onClick={async () => {
+                        if (!window.confirm("Delete this prediction record?")) return;
+                        try {
+                          await api.delete(`/history/${r.id}`);
+                          setData((prev) => prev.filter((row) => row.id !== r.id));
+                        } catch (err) {
+                          console.error("Delete record failed", err);
+                          alert("Failed to delete record. Please try again.");
+                        }
+                      }}
+                    >
+                      Delete
                     </Button>
                   </TableCell>
                 </TableRow>
