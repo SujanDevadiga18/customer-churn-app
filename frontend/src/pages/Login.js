@@ -1,302 +1,134 @@
-import { useState } from "react";
-import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
-import {
-    Box,
-    Button,
-    TextField,
-    Typography,
-    Paper,
-    Alert,
-    InputAdornment,
-    IconButton,
-    CircularProgress,
-    Container
+import React, { useState } from "react";
+import { 
+  Box, 
+  Paper, 
+  Typography, 
+  TextField, 
+  Button, 
+  Link, 
+  Alert,
+  InputAdornment,
+  IconButton,
+  CircularProgress
 } from "@mui/material";
-import {
-    Visibility,
-    VisibilityOff,
-    Login as LoginIcon,
-    PersonAdd,
-    Email as EmailIcon,
-    Lock as LockIcon
-} from "@mui/icons-material";
-import { motion, AnimatePresence } from "framer-motion";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Visibility, Bolt, Person, VpnKey } from "@mui/icons-material";
+import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
-    const [username, setUsername] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-    const { login, register } = useAuth();
-    const navigate = useNavigate();
-    const [isRegister, setIsRegister] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError("");
-        setLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await login(username, password);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err.response?.data?.detail || "Access Denied: Invalid Credentials");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // Validation
-        if (isRegister) {
-            if (!email.endsWith('@gmail.com')) {
-                setError("Only Gmail addresses are allowed for registration.");
-                setLoading(false);
-                return;
-            }
-        } else {
-            // For login, if it looks like an email, check domain
-            if (username.includes('@') && !username.endsWith('@gmail.com')) {
-                setError("Only Gmail addresses are allowed for login.");
-                setLoading(false);
-                return;
-            }
-        }
-
-        try {
-            if (isRegister) {
-                await register(username, email, password);
-                alert("Registration successful! Please login.");
-                setIsRegister(false);
-                setEmail("");
-            } else {
-                await login(username, password);
-                navigate("/");
-            }
-        } catch (err) {
-            console.error("Login/Register error:", err);
-            let errMsg = "Action failed. Please check your credentials.";
-            
-            if (err.response && err.response.data) {
-                if (typeof err.response.data.detail === "string") {
-                    errMsg = err.response.data.detail;
-                } else if (err.response.data.detail) {
-                    errMsg = JSON.stringify(err.response.data.detail);
-                } else if (err.response.data.message) {
-                    errMsg = err.response.data.message;
-                }
-            } else if (err.message) {
-                errMsg = "Network Error: Cannot connect to backend server. Make sure it is running.";
-            }
-            
-            setError(errMsg);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const toggleMode = () => {
-        setIsRegister(!isRegister);
-        setError("");
-        setUsername("");
-        setEmail("");
-        setPassword("");
-    };
-
-    return (
-        <Box
-            sx={{
-                minHeight: "100vh",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: `linear-gradient(rgba(240, 244, 248, 0.8), rgba(240, 244, 248, 0.8)), url("/login_bg.png")`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                p: 2
-            }}
+  return (
+    <Box 
+      sx={{ 
+        height: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: 'radial-gradient(circle at center, #111827 0%, #0A0A0F 100%)'
+      }}
+    >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <Paper 
+          className="glass-card"
+          sx={{ 
+            p: 5, 
+            width: 420, 
+            bgcolor: 'rgba(17, 24, 39, 0.8)',
+            textAlign: 'center',
+            position: 'relative',
+            overflow: 'hidden'
+          }}
         >
-            <Container maxWidth="xs">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6 }}
-                >
-                    {/* CHURN HEADERING */}
-                    <Box sx={{ textAlign: "center", mb: 4 }}>
-                        <Typography
-                            variant="h2"
-                            fontWeight="900"
-                            sx={{
-                                letterSpacing: "-2px",
-                                color: "primary.main",
-                                textTransform: "uppercase",
-                                display: "inline-block",
-                                borderBottom: "4px solid",
-                                borderColor: "error.main",
-                                lineHeight: 1
-                            }}
-                        >
-                            CHURN
-                        </Typography>
-                        <Typography
-                            variant="h6"
-                            fontWeight="500"
-                            color="text.secondary"
-                            sx={{ letterSpacing: "4px", mt: 1, textTransform: "uppercase" }}
-                        >
-                            Intelligence Hub
-                        </Typography>
-                    </Box>
+          {/* Background Glow */}
+          <Box sx={{ 
+            position: 'absolute', top: -100, left: -100, 
+            width: 200, height: 200, 
+            background: 'radial-gradient(circle, rgba(0,245,255,0.1) 0%, transparent 70%)' 
+          }} />
 
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            p: 4,
-                            borderRadius: 4,
-                            background: "rgba(255, 255, 255, 0.7)",
-                            backdropFilter: "blur(20px)",
-                            border: "1px solid rgba(255, 255, 255, 0.5)",
-                            boxShadow: "0 20px 40px rgba(0,0,0,0.05)",
-                            textAlign: "center"
-                        }}
-                    >
-                        <Box sx={{ mb: 4 }}>
-                            <Typography variant="h5" fontWeight="700" color="text.primary">
-                                {isRegister ? "Create Account" : "Welcome Back"}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                {isRegister ? "Start monitoring your customer health" : "Sign in to your dashboard"}
-                            </Typography>
-                        </Box>
+          <Box sx={{ mb: 4 }}>
+            <Box sx={{ 
+              width: 56, height: 56, 
+              background: 'linear-gradient(45deg, #00F5FF, #7B61FF)',
+              borderRadius: '14px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 20px',
+              boxShadow: '0 0 20px rgba(0, 245, 255, 0.3)'
+            }}>
+              <Bolt sx={{ color: '#0A0A0F', fontSize: 32 }} />
+            </Box>
+            <Typography variant="h4" sx={{ fontWeight: 900, mb: 1, letterSpacing: '-1px' }}>INITIALIZE</Typography>
+            <Typography variant="body2" sx={{ color: '#94A3B8' }}>Identify yourself to access ChurnOS Core</Typography>
+          </Box>
 
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={isRegister ? "register" : "login"}
-                                initial={{ opacity: 0, x: 10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -10 }}
-                                transition={{ duration: 0.2 }}
-                            >
-                                {error && (
-                                    <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-                                        {error}
-                                    </Alert>
-                                )}
+          {error && <Alert severity="error" sx={{ mb: 3, borderRadius: '12px', bgcolor: 'rgba(211, 47, 47, 0.1)' }}>{error}</Alert>}
 
-                                <form onSubmit={handleSubmit}>
-                                    {isRegister && (
-                                        <TextField
-                                            label="Email Address"
-                                            type="email"
-                                            fullWidth
-                                            variant="outlined"
-                                            margin="normal"
-                                            value={email}
-                                            onChange={(e) => setEmail(e.target.value)}
-                                            required
-                                            slotProps={{
-                                                input: {
-                                                    startAdornment: (
-                                                        <InputAdornment position="start">
-                                                            <EmailIcon fontSize="small" color="action" />
-                                                        </InputAdornment>
-                                                    ),
-                                                    sx: { borderRadius: 3, bgcolor: "rgba(255,255,255,0.5)" }
-                                                }
-                                            }}
-                                        />
-                                    )}
-                                    <TextField
-                                        label="Username or Email"
-                                        fullWidth
-                                        variant="outlined"
-                                        margin="normal"
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        required
-                                        slotProps={{
-                                            input: {
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <EmailIcon fontSize="small" color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                                sx: { borderRadius: 3, bgcolor: "rgba(255,255,255,0.5)" }
-                                            }
-                                        }}
-                                    />
-                                    <TextField
-                                        label="Password"
-                                        type={showPassword ? "text" : "password"}
-                                        fullWidth
-                                        variant="outlined"
-                                        margin="normal"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        required
-                                        slotProps={{
-                                            input: {
-                                                startAdornment: (
-                                                    <InputAdornment position="start">
-                                                        <LockIcon fontSize="small" color="action" />
-                                                    </InputAdornment>
-                                                ),
-                                                endAdornment: (
-                                                    <InputAdornment position="end">
-                                                        <IconButton
-                                                            onClick={() => setShowPassword(!showPassword)}
-                                                            edge="end"
-                                                            size="small"
-                                                        >
-                                                            {showPassword ? <VisibilityOff /> : <Visibility />}
-                                                        </IconButton>
-                                                    </InputAdornment>
-                                                ),
-                                                sx: { borderRadius: 3, bgcolor: "rgba(255,255,255,0.5)" }
-                                            }
-                                        }}
-                                    />
+          <form onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="Username / Email"
+              margin="normal"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><Person sx={{ color: '#00F5FF' }} /></InputAdornment>
+              }}
+            />
+            <TextField
+              fullWidth
+              label="Access Secret"
+              type="password"
+              margin="normal"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><VpnKey sx={{ color: '#00F5FF' }} /></InputAdornment>,
+              }}
+            />
+            <Button 
+              fullWidth 
+              type="submit" 
+              variant="contained" 
+              size="large"
+              disabled={loading}
+              sx={{ 
+                mt: 4, py: 2, 
+                fontWeight: 800, 
+                borderRadius: '14px',
+                background: 'linear-gradient(90deg, #00F5FF, #7B61FF)',
+                '&:hover': { boxShadow: '0 0 20px rgba(0, 245, 255, 0.4)' }
+              }}
+            >
+              {loading ? <CircularProgress size={26} color="inherit" /> : "START SESSION"}
+            </Button>
+          </form>
 
-                                    <Button
-                                        type="submit"
-                                        variant="contained"
-                                        fullWidth
-                                        size="large"
-                                        disabled={loading}
-                                        sx={{
-                                            mt: 4,
-                                            py: 1.8,
-                                            borderRadius: 3,
-                                            fontWeight: "800",
-                                            textTransform: "uppercase",
-                                            letterSpacing: "1px",
-                                            boxShadow: "0 10px 20px rgba(41, 121, 255, 0.2)"
-                                        }}
-                                    >
-                                        {loading ? (
-                                            <CircularProgress size={24} color="inherit" />
-                                        ) : isRegister ? (
-                                            "Sign Up Now"
-                                        ) : (
-                                            "Login to Hub"
-                                        )}
-                                    </Button>
-                                </form>
-                            </motion.div>
-                        </AnimatePresence>
-
-                        <Box sx={{ mt: 4, pt: 2, borderTop: "1px solid rgba(0,0,0,0.05)" }}>
-                            <Typography variant="body2" color="text.secondary">
-                                {isRegister ? "Already part of the network?" : "New to the platform?"}
-                                <Button
-                                    onClick={toggleMode}
-                                    sx={{
-                                        ml: 1,
-                                        fontWeight: "700",
-                                        textTransform: "none",
-                                        "&:hover": { bgcolor: "transparent", textDecoration: "underline" }
-                                    }}
-                                >
-                                    {isRegister ? "Sign In" : "Register Here"}
-                                </Button>
-                            </Typography>
-                        </Box>
-                    </Paper>
-                </motion.div>
-            </Container>
-        </Box>
-    );
+          <Typography sx={{ mt: 4, fontSize: '14px', color: '#94A3B8' }}>
+            New NODE? <Link component={RouterLink} to="/register" sx={{ color: '#00F5FF', fontWeight: 700, textDecoration: 'none' }}>REGISTER ACCOUNT</Link>
+          </Typography>
+        </Paper>
+      </motion.div>
+    </Box>
+  );
 }

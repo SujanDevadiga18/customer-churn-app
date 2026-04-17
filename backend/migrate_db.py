@@ -1,22 +1,41 @@
 import sqlite3
-import os
 
-db_path = "churn.db"
+paths = ["churn.db", "database/churn.db"]
 
-if not os.path.exists(db_path):
-    print("Database not found.")
-else:
+for db_path in paths:
+    print(f"\n--- Migrating: {db_path} ---")
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
-    try:
-        cursor.execute("ALTER TABLE predictions ADD COLUMN explanation TEXT")
-        conn.commit()
-        print("Successfully added 'explanation' column to 'predictions' table.")
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" in str(e).lower():
-            print("Column 'explanation' already exists.")
-        else:
-            print(f"Error: {e}")
-    finally:
+
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    tables = [row[0] for row in cursor.fetchall()]
+    print("Tables found:", tables)
+
+    if "users" not in tables:
+        print("SKIP: No users table in this db")
         conn.close()
+        continue
+
+    cursor.execute("PRAGMA table_info(users)")
+    cols = [row[1] for row in cursor.fetchall()]
+    print("Current columns:", cols)
+
+    if "is_verified" not in cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0")
+        print("Added: is_verified")
+    if "otp_code" not in cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN otp_code TEXT")
+        print("Added: otp_code")
+    if "otp_expiry" not in cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN otp_expiry DATETIME")
+        print("Added: otp_expiry")
+
+    # Mark all existing users as verified so they can still log in
+    cursor.execute("UPDATE users SET is_verified = 1")
+    print(f"Marked all existing users as verified: {cursor.rowcount} rows")
+
+    conn.commit()
+    conn.close()
+    print("Done.")
+
+print("\nMigration complete.")

@@ -1,42 +1,37 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score
 import joblib
 from pathlib import Path
 
 # ----- LOAD DATA -----
-df = pd.read_csv("backend/data/churn.csv")
-
-# Fix TotalCharges
-df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
-df["TotalCharges"] = df["TotalCharges"].fillna(0)
-
-# Drop ID column (important!)
-df = df.drop(columns=["customerID"])
+df = pd.read_csv("backend/data/telecom_churn_final.csv")
 
 # Target
-y = df["Churn"].map({"Yes": 1, "No": 0})
-X = df.drop(columns=["Churn"])
+y = df["churn"]
+# Keep only specified features
+features = ["telecom_partner", "data_used", "tenure_months", "inactive_days", "sms_sent", "calls_made"]
+X = df[features]
 
 # Feature groups
-numeric = ["SeniorCitizen", "tenure", "MonthlyCharges", "TotalCharges"]
-categorical = [c for c in X.columns if c not in numeric]
+numeric = ["data_used", "tenure_months", "inactive_days", "sms_sent", "calls_made"]
+categorical = ["telecom_partner"]
 
 preprocess = ColumnTransformer(
     transformers=[
         ("cat", OneHotEncoder(handle_unknown="ignore"), categorical),
-        ("num", "passthrough", numeric),
+        ("num", StandardScaler(), numeric),
     ]
 )
 
 model = Pipeline(
     steps=[
         ("preprocess", preprocess),
-        ("knn", KNeighborsClassifier(n_neighbors=5)),
+        ("clf", RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)),
     ]
 )
 

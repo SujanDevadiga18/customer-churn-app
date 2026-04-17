@@ -1,197 +1,79 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database.session import get_db
-from database.schema import Prediction, User
+from database.schema import Prediction
 from sqlalchemy import func
-from .auth import get_current_user
-
-def get_base_query(db, user):
-    query = db.query(Prediction)
-    if user.role != "admin":
-        query = query.filter(Prediction.user_id == user.id)
-    return query
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 @router.get("/summary")
-def analytics_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    base_query = get_base_query(db, current_user)
-    
-    rows = base_query.all()
-    total = len(rows)
-    high_risk = sum(1 for r in rows if r.probability is not None and r.probability > 0.5)
-
-    # Calculate Revenue at Risk (Sum of MonthlyCharges for likely churners)
-    revenue_at_risk = sum(r.monthly_charges for r in rows if r.probability is not None and r.probability > 0.5 and r.monthly_charges is not None)
-
-    churn_rate = (high_risk / total) * 100 if total > 0 else 0
-
+def analytics_summary(db: Session = Depends(get_db)):
+    total = db.query(func.count(Prediction.id)).scalar() or 0
+    # Use probability > 0.5 as the churn threshold (matches "Likely to Churn" + "Maybe")
+    churn_count = db.query(func.count(Prediction.id)).filter(Prediction.probability > 0.5).scalar() or 0
+    churn_rate = (churn_count / total * 100) if total > 0 else 0
+    revenue_at_risk = churn_count * 60
     return {
         "total_predictions": total,
-        "high_risk_customers": high_risk,
-        "revenue_at_risk": round(revenue_at_risk, 2),
-        "churn_rate": round(churn_rate, 2)
+        "churn_rate": round(churn_rate, 1),
+        "revenue_at_risk": revenue_at_risk
     }
 
 @router.get("/probability_distribution")
-def probability_distribution(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    base_query = get_base_query(db, current_user)
-    probs = [p.probability for p in base_query.all()]
-
-    buckets = [
-        {"bucket": "0–0.2", "count": 0},
-        {"bucket": "0.2–0.4", "count": 0},
-        {"bucket": "0.4–0.6", "count": 0},
-        {"bucket": "0.6–0.8", "count": 0},
-        {"bucket": "0.8–1.0", "count": 0},
-    ]
-
-    for p in probs:
-        if p <= 0.2: buckets[0]["count"] += 1
-        elif p <= 0.4: buckets[1]["count"] += 1
-        elif p <= 0.6: buckets[2]["count"] += 1
-        elif p <= 0.8: buckets[3]["count"] += 1
-        else: buckets[4]["count"] += 1
-
-    return buckets
-
-@router.get("/churn_by_contract")
-def churn_by_contract(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    base_query = get_base_query(db, current_user)
-    rows = base_query.all()
-
-    result = {
-        "Month-to-month": {"churn": 0, "total": 0},
-        "One year": {"churn": 0, "total": 0},
-        "Two year": {"churn": 0, "total": 0},
-    }
-
-    for r in rows:
-        if r.contract not in result:
-            continue
-
-        result[r.contract]["total"] += 1
-
-        if r.label == "Likely to Churn":
-            result[r.contract]["churn"] += 1
-
-    # convert to chart-friendly format
-    output = []
-    for k, v in result.items():
-        churn_rate = (v["churn"] / v["total"]) * 100 if v["total"] else 0
-        output.append({"contract": k, "churn_rate": round(churn_rate, 2)})
-
-    return output
-
-@router.get("/top_risk")
-def top_risk(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    base_query = get_base_query(db, current_user)
-    rows = (
-        base_query
-        .order_by(Prediction.probability.desc())
-        .limit(10)
-        .all()
+def probability_distribution(db: Session = Depends(get_db)):
+    query = db.query(
+        func.count(Prediction.id).filter(Prediction.probability <= 0.2).label("b1"),
+        func.count(Prediction.id).filter(Prediction.probability > 0.2, Prediction.probability <= 0.4).label("b2"),
+        func.count(Prediction.id).filter(Prediction.probability > 0.4, Prediction.probability <= 0.6).label("b3"),
+        func.count(Prediction.id).filter(Prediction.probability > 0.6, Prediction.probability <= 0.8).label("b4"),
+        func.count(Prediction.id).filter(Prediction.probability > 0.8).label("b5")
     )
-
+    r = query.one()
     return [
-        {
-            "customer_id": r.customer_id,
-            "probability": round(r.probability, 3),
-            "contract": r.contract,
-            "tenure": r.tenure,
-            "label": r.label
-        }
-        for r in rows
+        {"bucket": "0–20%", "count": r.b1},
+        {"bucket": "20–40%", "count": r.b2},
+        {"bucket": "40–60%", "count": r.b3},
+        {"bucket": "60–80%", "count": r.b4},
+        {"bucket": "80–100%", "count": r.b5}
     ]
 
-
-@router.get("/scatter_data")
-def scatter_data(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Sample 500 points for performance
-    base_query = get_base_query(db, current_user)
-    rows = (
-        base_query.with_entities(Prediction.tenure, Prediction.monthly_charges, Prediction.probability, Prediction.label)
-        .limit(500)
-        .all()
-    )
-    return [
-        {
-            "tenure": r.tenure,
-            "monthly_charges": r.monthly_charges,
-            "probability": round(r.probability, 3),
-            "label": r.label
-        }
-        for r in rows
-    ]
-
-
-@router.get("/trend_by_tenure")
-def trend_by_tenure(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Get granular data first
-    base_query = get_base_query(db, current_user)
-    raw_results = (
-        base_query.with_entities(Prediction.tenure, func.avg(Prediction.monthly_charges).label("avg_charges"))
-        .group_by(Prediction.tenure)
-        .order_by(Prediction.tenure)
-        .all()
-    )
-    
-    # Bin into 6-month intervals in Python
-    # e.g., 1-6, 7-12, 13-18...
-    bins = {}
-    
-    for r in raw_results:
-        if r.tenure == 0: continue # Skip 0 tenure if exists
-        
-        # Calculate bucket index (0 for 1-6, 1 for 7-12, etc.)
-        bucket_idx = (r.tenure - 1) // 6
-        bucket_label = f"{bucket_idx * 6 + 1}-{bucket_idx * 6 + 6}m"
-        
-        if bucket_label not in bins:
-            bins[bucket_label] = {"sum": 0, "count": 0, "sort_key": bucket_idx}
-            
-        bins[bucket_label]["sum"] += r.avg_charges
-        bins[bucket_label]["count"] += 1
-        
-    # Average the buckets
-    output = []
-    for label, data in bins.items():
-        output.append({
-            "tenure": label,
-            "avg_charges": round(data["sum"] / data["count"], 2),
-            "_sort": data["sort_key"]
-        })
-        
-    # Sort by time
-    output.sort(key=lambda x: x["_sort"])
-    
-    return [{"tenure": x["tenure"], "avg_charges": x["avg_charges"]} for x in output]
+@router.get("/provider_stats")
+def provider_stats(db: Session = Depends(get_db)):
+    results = db.query(
+        Prediction.telecom_partner,
+        func.count(Prediction.id).label("total"),
+        func.count(Prediction.id).filter(Prediction.probability > 0.5).label("churn")
+    ).group_by(Prediction.telecom_partner).all()
+    return [{
+        "name": r.telecom_partner or "Unknown",
+        "churn_rate": round((r.churn / r.total * 100), 1) if r.total > 0 else 0,
+        "total_users": r.total
+    } for r in results]
 
 @router.get("/payment_stats")
-def payment_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    base_query = get_base_query(db, current_user)
-    rows = base_query.all()
-    
-    stats = {}
-    
-    for r in rows:
-        # Check if payment_method column exists/is populated. 
-        # Since we just added it, old rows might have None. Handle gracefully.
-        pm = r.payment_method or "Unknown"
-        if pm not in stats:
-            stats[pm] = {"churn": 0, "total": 0}
-            
-        stats[pm]["total"] += 1
-        if r.label == "Likely to Churn":
-            stats[pm]["churn"] += 1
-            
-    output = []
-    for k, v in stats.items():
-        churn_rate = (v["churn"] / v["total"]) * 100 if v["total"] else 0
-        output.append({
-            "name": k,
-            "value": v["total"], 
-            "churn_rate": round(churn_rate, 2)
-        })
-        
-    return output
+def payment_stats(db: Session = Depends(get_db)):
+    results = db.query(Prediction.telecom_partner, func.count(Prediction.id)).group_by(Prediction.telecom_partner).all()
+    return [{"name": r[0] or "Unknown", "value": r[1]} for r in results]
+
+@router.get("/trend_by_tenure")
+def trend_by_tenure(db: Session = Depends(get_db)):
+    results = db.query(Prediction.tenure_months, func.avg(Prediction.data_used)).group_by(Prediction.tenure_months).all()
+    buckets = {}
+    for r in results:
+        t = r[0] or 1
+        group = f"{((t-1)//6)*6+1}-{((t-1)//6+1)*6}m"
+        if group not in buckets:
+            buckets[group] = []
+        buckets[group].append(float(r[1]) / 10 if r[1] else 50)
+    return [{"tenure": k, "avg_charges": round(sum(v)/len(v), 1)} for k, v in buckets.items()]
+
+@router.get("/top_risk")
+def get_top_risk(db: Session = Depends(get_db)):
+    rows = db.query(Prediction).filter(Prediction.probability > 0.5).order_by(Prediction.probability.desc()).limit(10).all()
+    return [{
+        "customer_id": r.customer_id,
+        "probability": r.probability,
+        "label": r.label,
+        "telecom_partner": r.telecom_partner,
+        "explanation": r.explanation
+    } for r in rows]
